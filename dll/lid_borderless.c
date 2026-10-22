@@ -30,10 +30,12 @@
  *   - Only the game's own top-level windows are touched, and only their style
  *     and position. The window is moved with SWP_ASYNCWINDOWPOS, so the plugin
  *     never waits on the game.
- *   - In the game, four of its calls to Windows are pointed at the plugin (in
+ *   - In the game, seven of its calls to Windows are pointed at the plugin (in
  *     its import table, not its code): AdjustWindowRect(Ex) answer "no frame",
- *     and SetWindowLong(Ptr) leave the title bar and edges off its top-level
- *     windows. Nothing else in the game is changed.
+ *     SetWindowLong(Ptr) leave the title bar and edges off its top-level
+ *     windows, and GetMonitorInfoW, SystemParametersInfoW and GetSystemMetrics
+ *     answer that the taskbar leaves it the whole screen (each passes every
+ *     other question straight to Windows). Nothing else in the game is changed.
  *   - No network, no registry, no files but its own log, lid-borderless.log,
  *     next to itself.
  *   - Delete lid-borderless.dll (or untick the mod) and the game is exactly
@@ -361,6 +363,59 @@ static void *redirect(unsigned char *base, const char *name, void *to)
     return NULL;
 }
 
+/*
+ * The game also keeps its window inside the screen's work area - the monitor
+ * less the taskbar - and keeps 16:9 while it does: on a 3840x2160 monitor with
+ * the taskbar 72 pixels high (150% scaling) it drew at 3712x2088, and put that
+ * back each time the window was stretched, leaving a taskbar-wide gap all
+ * round (0.1.1). A borderless fullscreen window covers the taskbar anyway, so
+ * the game is told the work area is the whole monitor, by each of the three
+ * calls it can ask through.
+ */
+typedef BOOL (WINAPI *monitor_info_fn)(HMONITOR, LPMONITORINFO);
+typedef BOOL (WINAPI *spi_fn)(UINT, UINT, PVOID, UINT);
+typedef int (WINAPI *metrics_fn)(int);
+
+static monitor_info_fn g_monitor_info;
+static spi_fn g_spi;
+static metrics_fn g_metrics;
+
+static BOOL WINAPI whole_monitor_info(HMONITOR m, LPMONITORINFO mi)
+{
+    BOOL ok = g_monitor_info(m, mi);
+
+    if (ok && mi && mi->cbSize >= sizeof(MONITORINFO))
+        mi->rcWork = mi->rcMonitor;
+    return ok;
+}
+
+static BOOL WINAPI whole_screen_parameters(UINT action, UINT ui, PVOID pv, UINT win_ini)
+{
+    BOOL ok = g_spi(action, ui, pv, win_ini);
+
+    if (ok && action == SPI_GETWORKAREA && pv) {
+        RECT *r = (RECT *)pv;       /* the main monitor's, which starts at 0,0 */
+        r->left = 0;
+        r->top = 0;
+        r->right = g_metrics(SM_CXSCREEN);
+        r->bottom = g_metrics(SM_CYSCREEN);
+    }
+    return ok;
+}
+
+static int WINAPI whole_screen_metrics(int index)
+{
+    switch (index) {
+    case SM_CXFULLSCREEN:           /* the work area, less a title bar */
+    case SM_CXMAXIMIZED:            /* a maximised window: the work area and its frame */
+        return g_metrics(SM_CXSCREEN);
+    case SM_CYFULLSCREEN:
+    case SM_CYMAXIMIZED:
+        return g_metrics(SM_CYSCREEN);
+    }
+    return g_metrics(index);
+}
+
 static void redirect_window_sizing(void)
 {
     unsigned char *game = (unsigned char *)GetModuleHandleW(NULL);
@@ -378,6 +433,19 @@ static void redirect_window_sizing(void)
     done += redirect(game, "SetWindowLongW", (void *)set_long) != NULL;
     done += redirect(game, "SetWindowLongPtrW", (void *)set_long_ptr) != NULL;
     log_line("the game is told its window has no frame (%d of 4 of its window calls)", done);
+
+    g_monitor_info = (monitor_info_fn)GetProcAddress(user32, "GetMonitorInfoW");
+    g_spi = (spi_fn)GetProcAddress(user32, "SystemParametersInfoW");
+    g_metrics = (metrics_fn)GetProcAddress(user32, "GetSystemMetrics");
+    if (!g_monitor_info || !g_spi || !g_metrics) {
+        log_line("user32 is missing a screen call - the game keeps its window clear of the taskbar");
+        return;
+    }
+    done = 0;
+    done += redirect(game, "GetMonitorInfoW", (void *)whole_monitor_info) != NULL;
+    done += redirect(game, "SystemParametersInfoW", (void *)whole_screen_parameters) != NULL;
+    done += redirect(game, "GetSystemMetrics", (void *)whole_screen_metrics) != NULL;
+    log_line("the game is told the taskbar leaves it the whole screen (%d of 3 of its screen calls)", done);
 }
 
 /* ------------------------------------------------------------ start */

@@ -32,6 +32,12 @@ frame. Its own sums then come to the monitor's size. A window drawing at 90%
 of the monitor or more each way is also given the whole monitor, unless the
 game shrinks it back.
 
+The game also keeps its window inside the work area - the screen less the
+taskbar - at 16:9. On a 4K monitor at 150% scaling, where the taskbar is 72
+pixels high, it drew at 3712x2088 and left a taskbar-wide gap all round
+(0.1.1). A borderless fullscreen window covers the taskbar anyway, so the
+plugin tells the game the work area is the whole monitor (0.1.2).
+
 The game sets its window up again whenever the resolution or display mode
 changes, so the plugin looks at the window four times a second and makes it
 borderless again when it has a frame again. Should the game undo every change
@@ -44,10 +50,13 @@ Safety rules, all in [dll/lid_borderless.c](dll/lid_borderless.c):
 - It only does anything inside `BrgGame-Steam.exe`. Loaded by any other
   program, it changes nothing.
 - It touches only the game's own windows - their style and position.
-- Four of the game's calls to Windows are pointed at the plugin, in the game's
+- Seven of the game's calls to Windows are pointed at the plugin, in the game's
   import table (not its code): `AdjustWindowRect`/`AdjustWindowRectEx` answer
-  "no frame", and `SetWindowLong`/`SetWindowLongPtr` leave the title bar and
-  edges off its top-level windows. Nothing else in the game is changed.
+  "no frame", `SetWindowLong`/`SetWindowLongPtr` leave the title bar and edges
+  off its top-level windows, and `GetMonitorInfoW`, `SystemParametersInfoW`
+  and `GetSystemMetrics` answer that the taskbar leaves it the whole screen
+  (every other question goes straight to Windows). Nothing else in the game is
+  changed.
 - It never waits on the game: the window is moved with `SWP_ASYNCWINDOWPOS`.
 - No network, no registry, no files but its own log, `lid-borderless.log`,
   next to itself.
@@ -77,8 +86,9 @@ GitHub builds every release from this repository, and so can you:
 `out/lid-borderless.dll` is the plugin, and its SHA-256 is printed - compare it
 with the one on the release page. `--test` builds a stand-in game window and
 checks it goes borderless at the game's own size, covers the monitor at the
-monitor's resolution (including a stand-in that sizes its window the way the
-game does), goes borderless again after the "game" sets it up again,
+monitor's resolution (including stand-ins that size their window the way the
+game does, around the frame and around the taskbar), goes borderless again
+after the "game" sets it up again,
 is then left alone, backs off from a game that undoes every change, and that
 another program's window is never touched.
 

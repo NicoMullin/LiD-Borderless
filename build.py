@@ -144,6 +144,7 @@ def main():
     if args.test:
         ok = run_test("game-window", TESTS / "window.c", dll)
         ok = run_test("game-sizing", TESTS / "ue3window.c", dll) and ok
+        ok = run_test("taskbar", TESTS / "ue3workarea.c", dll) and ok
         ok = run_test("other-program", TESTS / "otherprogram.c", dll, exe="SomeOtherProgram.exe") and ok
         shutil.rmtree(OUT / "test")
         if not ok:

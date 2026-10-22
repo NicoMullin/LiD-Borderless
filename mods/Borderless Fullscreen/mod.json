@@ -2,7 +2,7 @@
   "id": "Borderless Fullscreen",
   "name": "Borderless Fullscreen",
   "description": "Ticked, the game is borderless: it runs in its own Windowed mode and lid-borderless.dll takes the window's title bar and edges away, so Alt+Tab is instant. Set the game's resolution to your monitor's and it fills the screen; at a lower one the window sits in the middle. Unticked, the game goes back to its normal fullscreen and the plugin is switched off.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "author": "KSFA",
   "category": "Quality of life",
   "tags": [
@@ -14,7 +14,8 @@
   "game_version": [
     "5.0.4.1.0 - 1.89",
     "5.0.4.1.0 - 1.89 (Steam 5.0.4.2.0)",
-    "5.0.4.4.0 - 1.91"
+    "5.0.4.4.0 - 1.91",
+    "5.0.5.0.0 - 1.92"
   ],
   "min_manager_version": "0.12.8",
   "plugin": "lid-borderless.dll",
